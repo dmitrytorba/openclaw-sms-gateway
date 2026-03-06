@@ -1,0 +1,9 @@
+{
+  "id": "sms-gateway",
+  "channels": ["sms-gateway"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

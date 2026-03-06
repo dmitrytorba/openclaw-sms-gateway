@@ -1,0 +1,11 @@
+{
+  "name": "@openclaw/sms-gateway",
+  "version": "0.1.0",
+  "description": "Two-way SMS channel via Android SMS Gateway",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
