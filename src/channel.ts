@@ -1,9 +1,17 @@
 import {
   DEFAULT_ACCOUNT_ID,
   normalizeAccountId,
-  normalizeE164,
   type ChannelPlugin,
 } from "openclaw/plugin-sdk";
+
+function normalizeE164Local(raw: string): string | null {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return null;
+  const hasPlus = trimmed.startsWith("+");
+  const digits = trimmed.replace(/[^0-9]/g, "");
+  if (digits.length < 7 || digits.length > 15) return null;
+  return (hasPlus ? "+" : "+") + digits;
+}
 import { getRuntime } from "./runtime.js";
 import { sendSms, type SmsGatewayConfig } from "./gateway-api.js";
 
@@ -81,7 +89,7 @@ export const smsGatewayPlugin: ChannelPlugin<any> = {
       allowFrom
         .map((e: string) => e.trim())
         .filter(Boolean)
-        .map((e: string) => (e === "*" ? "*" : normalizeE164(e)))
+        .map((e: string) => (e === "*" ? "*" : normalizeE164Local(e)))
         .filter(Boolean),
   },
   security: {
@@ -90,7 +98,7 @@ export const smsGatewayPlugin: ChannelPlugin<any> = {
       allowFrom: account.config.allowFrom ?? [],
       policyPath: "channels.sms-gateway.dmPolicy",
       allowFromPath: "channels.sms-gateway.",
-      normalizeEntry: (raw: string) => normalizeE164(raw.trim()),
+      normalizeEntry: (raw: string) => normalizeE164Local(raw.trim()),
     }),
   },
   messaging: {
@@ -98,7 +106,7 @@ export const smsGatewayPlugin: ChannelPlugin<any> = {
       const raw = typeof input === "string" ? input : input?.to;
       if (!raw) return null;
       const cleaned = raw.replace(/^sms(-gateway)?:/i, "");
-      const e164 = normalizeE164(cleaned);
+      const e164 = normalizeE164Local(cleaned);
       return e164 ? { to: e164 } : null;
     },
     targetResolver: {
