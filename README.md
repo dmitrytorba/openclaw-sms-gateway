@@ -83,7 +83,7 @@ Add the `sms-gateway` section under `channels`:
         "password": "YOUR_CLOUD_PASSWORD"
       },
       "local": {
-        "baseUrl": "http://192.168.1.70:8080",
+        "baseUrl": "http://PHONE_LAN_IP:8080",
         "username": "YOUR_LOCAL_USERNAME",
         "password": "YOUR_LOCAL_PASSWORD"
       },
@@ -110,7 +110,7 @@ Or if using the local API:
 curl -X POST -u 'USERNAME:PASSWORD' \
   -H 'Content-Type: application/json' \
   -d '{"url":"https://your-domain.com/sms-gateway/webhook","event":"sms:received"}' \
-  http://192.168.1.70:8080/webhooks
+  http://PHONE_LAN_IP:8080/webhooks
 ```
 
 ### 4. Restart the gateway
@@ -132,7 +132,7 @@ Send a text to your Android phone's number — the agent should reply.
 | `cloud.baseUrl` | `string` | — | Cloud API base URL (typically `https://api.sms-gate.app`) |
 | `cloud.username` | `string` | — | Cloud API username (from the Android app's cloud registration) |
 | `cloud.password` | `string` | — | Cloud API password |
-| `local.baseUrl` | `string` | — | Local API base URL (e.g., `http://192.168.1.70:8080`) |
+| `local.baseUrl` | `string` | — | Local API base URL (e.g., `http://PHONE_LAN_IP:8080`) |
 | `local.username` | `string` | — | Local API username |
 | `local.password` | `string` | — | Local API password |
 | `webhookSecret` | `string` | — | Optional secret; if set, inbound webhooks must include `X-Webhook-Secret` header |

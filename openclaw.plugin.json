@@ -1,9 +1,68 @@
 {
   "id": "sms-gateway",
+  "kind": "channel",
+  "name": "SMS Gateway",
+  "description": "Two-way SMS via Android SMS Gateway",
   "channels": ["sms-gateway"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
     "properties": {}
+  },
+  "channelConfigs": {
+    "sms-gateway": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Enable the SMS Gateway channel."
+          },
+          "dmPolicy": {
+            "type": "string",
+            "enum": ["allowlist", "open", "pairing", "closed"],
+            "description": "DM security policy for inbound SMS senders."
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Allowed inbound phone numbers in E.164 format."
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["local", "cloud"],
+            "description": "Use the LAN Android SMS Gateway API or the hosted cloud API."
+          },
+          "local": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "baseUrl": { "type": "string" },
+              "username": { "type": "string" },
+              "password": { "type": "string" }
+            }
+          },
+          "cloud": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "baseUrl": { "type": "string" },
+              "username": { "type": "string" },
+              "password": { "type": "string" }
+            }
+          },
+          "webhookSecret": {
+            "type": "string",
+            "description": "Optional shared secret for inbound webhook verification."
+          }
+        }
+      },
+      "uiHints": {
+        "local.password": { "sensitive": true },
+        "cloud.password": { "sensitive": true },
+        "webhookSecret": { "sensitive": true }
+      }
+    }
   }
 }

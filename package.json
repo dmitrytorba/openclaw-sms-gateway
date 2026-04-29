@@ -3,6 +3,25 @@
   "version": "0.1.0",
   "description": "Two-way SMS channel via Android SMS Gateway",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dmitrytorba/openclaw-sms-gateway.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dmitrytorba/openclaw-sms-gateway/issues"
+  },
+  "homepage": "https://github.com/dmitrytorba/openclaw-sms-gateway#readme",
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "sms",
+    "android-sms-gateway",
+    "chatbot"
+  ],
+  "peerDependencies": {
+    "openclaw": ">=2026.4.0"
+  },
   "openclaw": {
     "extensions": [
       "./index.ts"
