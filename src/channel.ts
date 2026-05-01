@@ -1,8 +1,11 @@
+import type { ChannelPlugin } from "openclaw/plugin-sdk";
+import type { OpenClawConfig } from "openclaw/plugin-sdk";
 import {
   DEFAULT_ACCOUNT_ID,
   normalizeAccountId,
-  type ChannelPlugin,
-} from "openclaw/plugin-sdk";
+} from "openclaw/plugin-sdk/core";
+import { getRuntime } from "./runtime.js";
+import { sendSms, type SmsGatewayConfig } from "./gateway-api.js";
 
 function normalizeE164Local(raw: string): string | null {
   const trimmed = (raw ?? "").trim();
@@ -12,8 +15,6 @@ function normalizeE164Local(raw: string): string | null {
   if (digits.length < 7 || digits.length > 15) return null;
   return (hasPlus ? "+" : "+") + digits;
 }
-import { getRuntime } from "./runtime.js";
-import { sendSms, type SmsGatewayConfig } from "./gateway-api.js";
 
 export interface SmsGatewayChannelConfig {
   enabled?: boolean;
@@ -40,9 +41,9 @@ export const smsGatewayPlugin: ChannelPlugin<any> = {
   meta: {
     id: "sms-gateway",
     label: "SMS Gateway",
-    icon: "📱",
-    category: "chat",
-    description: "Two-way SMS via Android SMS Gateway",
+    selectionLabel: "SMS Gateway",
+    docsPath: "/channels/sms-gateway",
+    blurb: "Two-way SMS via Android SMS Gateway",
   },
   capabilities: {
     chatTypes: ["direct"],
@@ -51,11 +52,11 @@ export const smsGatewayPlugin: ChannelPlugin<any> = {
   },
   reload: { configPrefixes: ["channels.sms-gateway"] },
   config: {
-    listAccountIds: () => [DEFAULT_ACCOUNT_ID],
-    resolveAccount: (cfg: any, accountId: string) => {
+    listAccountIds: (_cfg: OpenClawConfig) => [DEFAULT_ACCOUNT_ID],
+    resolveAccount: (cfg: OpenClawConfig, accountId?: string | null) => {
       const section = cfg?.channels?.["sms-gateway"] ?? {};
       return {
-        accountId: accountId ?? DEFAULT_ACCOUNT_ID,
+        accountId: normalizeAccountId(accountId ?? ""),
         name: section.name ?? "SMS Gateway",
         enabled: section.enabled !== false,
         config: section,
@@ -64,53 +65,58 @@ export const smsGatewayPlugin: ChannelPlugin<any> = {
       };
     },
     defaultAccountId: () => DEFAULT_ACCOUNT_ID,
-    setAccountEnabled: ({ cfg, enabled }: any) => ({
+    setAccountEnabled: ({ cfg, accountId, enabled }) => ({
       ...cfg,
       channels: {
         ...cfg.channels,
-        "sms-gateway": { ...cfg.channels?.["sms-gateway"], enabled },
+        "sms-gateway": {
+          ...cfg.channels?.["sms-gateway"],
+          enabled,
+        },
       },
     }),
-    deleteAccount: ({ cfg }: any) => {
+    deleteAccount: ({ cfg, accountId }) => {
       const next = { ...cfg, channels: { ...cfg.channels } };
       delete next.channels["sms-gateway"];
       return next;
     },
-    isConfigured: (account: any) => account.configured,
-    describeAccount: (account: any) => ({
+    isConfigured: (account) => account.configured,
+    describeAccount: (account) => ({
       accountId: account.accountId,
       name: account.name,
       enabled: account.enabled,
       configured: account.configured,
     }),
-    resolveAllowFrom: ({ cfg }: any) =>
+    resolveAllowFrom: ({ cfg }) =>
       (cfg?.channels?.["sms-gateway"]?.allowFrom ?? []).map(String),
-    formatAllowFrom: ({ allowFrom }: any) =>
+    formatAllowFrom: ({ allowFrom }) =>
       allowFrom
-        .map((e: string) => e.trim())
+        .map((e) => String(e).trim())
         .filter(Boolean)
-        .map((e: string) => (e === "*" ? "*" : normalizeE164Local(e)))
-        .filter(Boolean),
+        .map((e) => (e === "*" ? "*" : normalizeE164Local(e)))
+        .filter(Boolean) as string[],
   },
   security: {
-    resolveDmPolicy: ({ cfg, account }: any) => ({
+    resolveDmPolicy: ({ account }) => ({
       policy: account.config.dmPolicy ?? "allowlist",
       allowFrom: account.config.allowFrom ?? [],
       policyPath: "channels.sms-gateway.dmPolicy",
-      allowFromPath: "channels.sms-gateway.",
-      normalizeEntry: (raw: string) => normalizeE164Local(raw.trim()),
+      allowFromPath: "channels.sms-gateway.allowFrom",
+      approveHint: "Add the sender to channels.sms-gateway.allowFrom.",
+      normalizeEntry: (raw: string) => normalizeE164Local(raw.trim()) ?? "",
     }),
   },
   messaging: {
-    normalizeTarget: (input: any) => {
-      const raw = typeof input === "string" ? input : input?.to;
-      if (!raw) return null;
+    normalizeTarget: (raw: string) => {
       const cleaned = raw.replace(/^sms(-gateway)?:/i, "");
       const e164 = normalizeE164Local(cleaned);
-      return e164 ? { to: e164 } : null;
+      return e164 ?? undefined;
     },
     targetResolver: {
-      looksLikeId: (id: string) => /^\+?\d{7,15}$/.test(id?.trim()),
+      looksLikeId: (raw: string, normalized?: string) => {
+        const candidate = (normalized ?? raw)?.trim() ?? "";
+        return /^\+?\d{7,15}$/.test(candidate);
+      },
       hint: "<E.164 phone number>",
     },
   },
@@ -120,10 +126,14 @@ export const smsGatewayPlugin: ChannelPlugin<any> = {
       getRuntime().channel.text.chunkText(text, limit),
     chunkerMode: "text",
     textChunkLimit: 1600,
-    sendText: async ({ cfg, to, text }: any) => {
+    sendText: async ({ cfg, to, text }) => {
       const gatewayCfg = resolveGatewayConfig(cfg);
       const result = await sendSms(gatewayCfg, to, text);
-      return { channel: "sms-gateway", messageId: result.id, ...result };
+      return {
+        channel: "sms-gateway",
+        messageId: result.id ?? "pending",
+        ...result,
+      };
     },
   },
   status: {
@@ -134,8 +144,8 @@ export const smsGatewayPlugin: ChannelPlugin<any> = {
       lastStopAt: null,
       lastError: null,
     },
-    collectStatusIssues: (accounts: any[]) =>
-      accounts.flatMap((account: any) => {
+    collectStatusIssues: (accounts) =>
+      accounts.flatMap((account) => {
         const err =
           typeof account.lastError === "string"
             ? account.lastError.trim()
@@ -151,14 +161,14 @@ export const smsGatewayPlugin: ChannelPlugin<any> = {
             ]
           : [];
       }),
-    buildChannelSummary: ({ snapshot }: any) => ({
+    buildChannelSummary: ({ snapshot }) => ({
       configured: snapshot.configured ?? false,
       running: snapshot.running ?? false,
       lastStartAt: snapshot.lastStartAt ?? null,
       lastStopAt: snapshot.lastStopAt ?? null,
       lastError: snapshot.lastError ?? null,
     }),
-    buildAccountSnapshot: ({ account, runtime }: any) => ({
+    buildAccountSnapshot: ({ account, runtime }) => ({
       accountId: account.accountId,
       name: account.name,
       enabled: account.enabled,
@@ -172,7 +182,7 @@ export const smsGatewayPlugin: ChannelPlugin<any> = {
     }),
   },
   gateway: {
-    startAccount: async (ctx: any) => {
+    startAccount: async (ctx) => {
       const account = ctx.account;
       ctx.log?.info(
         `[${account.accountId}] SMS Gateway channel started (webhook mode)`,
