@@ -1,9 +1,11 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { emptyPluginConfigSchema, normalizeE164 } from "openclaw/plugin-sdk";
+import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
+import { normalizeE164 } from "openclaw/plugin-sdk/text-runtime";
 import { smsGatewayPlugin, resolveGatewayConfig } from "./src/channel.js";
 import { setSmsGatewayRuntime, getRuntime } from "./src/runtime.js";
 import { sendSms } from "./src/gateway-api.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { parseWebhookPayload } from "./src/webhook-payload.js";
 
 let pluginLogger: { info: Function; warn: Function; error: Function; debug: Function } | null = null;
 
@@ -32,34 +34,6 @@ function jsonResponse(
 ) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
-}
-
-/**
- * Parse the Android SMS Gateway webhook payload into a normalized form.
- * The app posts either a flat object or an { event, payload } wrapper.
- */
-function parseWebhookPayload(raw: any): {
-  event: string;
-  phoneNumber: string;
-  message: string;
-  receivedAt: string;
-  messageId?: string;
-} | null {
-  if (!raw || typeof raw !== "object") return null;
-
-  const inner = raw.payload ?? raw;
-  const phoneNumber = inner.sender ?? inner.phoneNumber ?? inner.from ?? raw.from;
-  const message = inner.message ?? inner.text ?? inner.body;
-  if (!phoneNumber || !message) return null;
-
-  return {
-    event: raw.event ?? "sms:received",
-    phoneNumber: String(phoneNumber),
-    message: String(message),
-    receivedAt:
-      inner.receivedAt ?? raw.receivedAt ?? new Date().toISOString(),
-    messageId: inner.messageId ?? inner.id,
-  };
 }
 
 const plugin = {
@@ -136,8 +110,16 @@ const plugin = {
         });
     };
 
-    api.registerHttpRoute({ path: "/sms-gateway/webhook", handler: webhookHandler });
-    api.registerHttpRoute({ path: "/webhook/sms", handler: webhookHandler });
+    api.registerHttpRoute({
+      path: "/sms-gateway/webhook",
+      handler: webhookHandler,
+      auth: "gateway",
+    });
+    api.registerHttpRoute({
+      path: "/webhook/sms",
+      handler: webhookHandler,
+      auth: "gateway",
+    });
 
     log("info", "registered webhooks at /sms-gateway/webhook and /webhook/sms");
   },
@@ -164,7 +146,7 @@ async function dispatchSmsInbound(
     cfg,
     channel: "sms-gateway",
     accountId,
-    peer: { kind: "user", id: senderE164 },
+    peer: { kind: "direct", id: senderE164 },
   });
   log("info", `route resolved — agent=${route.agentId} session=${route.sessionKey} matched=${route.matchedBy}`);
 
@@ -172,10 +154,7 @@ async function dispatchSmsInbound(
   const fromLabel = senderE164;
   const toTarget = `sms-gateway:${senderE164}`;
 
-  const envelopeOptions = rt.channel.reply.resolveEnvelopeFormatOptions(
-    cfg,
-    route.agentId,
-  );
+  const envelopeOptions = rt.channel.reply.resolveEnvelopeFormatOptions(cfg);
   log("debug", `envelope options: ${JSON.stringify(envelopeOptions)}`);
 
   const formattedBody = rt.channel.reply.formatInboundEnvelope({
@@ -245,7 +224,7 @@ async function dispatchSmsInbound(
         }
         try {
           const result = await sendSms(gatewayCfg, senderE164, text);
-          log("info", `SMS sent OK — id=${result.id} state=${result.state}`);
+          log("info", `SMS sent OK — id=${result?.id} state=${result?.state}`);
         } catch (err) {
           log("error", `sendSms failed: ${err}\n${(err as Error)?.stack ?? ""}`);
           throw err;
